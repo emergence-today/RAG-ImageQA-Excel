@@ -91,29 +91,26 @@ class RAGTestConfig:
     
     @classmethod
     def validate_config(cls) -> bool:
-        """驗證配置是否完整"""
-        required_fields = [
-            'RAG_API_URL',
-            'CLAUDE_API_KEY',
-            'IMAGE_DIR'
-        ]
+        """驗證配置"""
+        missing_configs = []
         
-        missing_fields = []
-        for field in required_fields:
-            if not getattr(cls, field):
-                missing_fields.append(field)
+        # 檢查必要的 RAG API 配置
+        if not cls.RAG_API_URL:
+            missing_configs.append('RAG_TEST_API_URL')
         
-        if missing_fields:
-            print(f"❌ 缺少必要配置: {', '.join(missing_fields)}")
+        # 檢查圖片目錄
+        if not cls.IMAGE_DIR or not os.path.exists(cls.IMAGE_DIR):
+            missing_configs.append('RAG_TEST_IMAGE_DIR (路徑不存在)')
+        
+        # Claude API 改為可選 - 如果沒有設定就使用模擬模式
+        if not cls.CLAUDE_API_KEY and not cls.AWS_ACCESS_KEY_ID:
+            print("⚠️ 未設定 Claude API 金鑰，將使用模擬模式進行問題生成和評估")
+        
+        if missing_configs:
+            print("❌ 缺少必要配置:")
+            for config in missing_configs:
+                print(f"   - {config}")
             return False
-        
-        # 檢查目錄是否存在
-        if not os.path.exists(cls.IMAGE_DIR):
-            print(f"❌ 圖片目錄不存在: {cls.IMAGE_DIR}")
-            return False
-        
-        # 確保結果目錄存在
-        os.makedirs(cls.RESULTS_DIR, exist_ok=True)
         
         print("✅ 配置驗證通過")
         return True
