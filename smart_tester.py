@@ -56,26 +56,40 @@ class SmartRAGTester:
         
         return "unknown"
     
-    def process_folder_input(self, folder_path: str, max_images_per_category: int = 5) -> List[Dict[str, Any]]:
+    def process_folder_input(self, folder_path: str, max_images_per_category: int = 5, selected_categories: List[str] = None) -> List[Dict[str, Any]]:
         """處理資料夾輸入 - 找圖片生成問題並測試"""
         print(f"📁 處理資料夾: {folder_path}")
-        
+
         # 獲取圖片分類
         categories = self.image_processor.get_image_categories(folder_path)
-        
+
         if not categories:
             print("❌ 資料夾中沒有找到圖片")
             return []
-        
-        print(f"📂 找到 {len(categories)} 個類別:")
+
+        # 如果有指定類別，只處理選定的類別
+        if selected_categories:
+            filtered_categories = {}
+            for category in selected_categories:
+                if category in categories:
+                    filtered_categories[category] = categories[category]
+                else:
+                    print(f"⚠️ 警告: 找不到類別 '{category}'")
+            categories = filtered_categories
+
+            if not categories:
+                print("❌ 沒有找到任何選定的類別")
+                return []
+
+        print(f"📂 將測試 {len(categories)} 個類別:")
         for category, images in categories.items():
             print(f"   - {category}: {len(images)} 張圖片")
-        
+
         # 執行測試
         results = []
         total_images = sum(min(len(images), max_images_per_category) for images in categories.values())
         current_image = 0
-        
+
         for category, images in categories.items():
             print(f"\n📁 測試類別: {category}")
             print("-" * 40)
@@ -280,7 +294,8 @@ class SmartRAGTester:
         
         if input_type == "folder":
             max_images = kwargs.get('max_images_per_category', 5)
-            results = self.process_folder_input(input_path, max_images)
+            selected_categories = kwargs.get('selected_categories', None)
+            results = self.process_folder_input(input_path, max_images, selected_categories)
         elif input_type == "excel":
             results = self.process_excel_input(input_path)
         else:
