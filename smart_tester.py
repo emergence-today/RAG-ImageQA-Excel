@@ -92,7 +92,26 @@ class SmartRAGTester:
                 try:
                     # 測試單張圖片（會自動生成問題）
                     result = self.rag_tester.test_single_image(image_path)
-                    results.append(result.__dict__)
+
+                    # 將 RAGTestResult 轉換為字典，但保持 cost_info 為物件
+                    result_dict = {
+                        'image_path': result.image_path,
+                        'category': result.category,
+                        'generated_question': result.generated_question,
+                        'rag_answer': result.rag_answer,
+                        'evaluation_scores': result.evaluation_scores,
+                        'overall_score': result.overall_score,
+                        'response_time': result.response_time,
+                        'has_image_reference': result.has_image_reference,
+                        'technical_accuracy': result.technical_accuracy,
+                        'completeness': result.completeness,
+                        'clarity': result.clarity,
+                        'cost_info': result.cost_info,  # 保持為 CostInfo 物件
+                        'api_response': result.api_response,
+                        'error_message': result.error_message,
+                        'success': result.error_message is None
+                    }
+                    results.append(result_dict)
                     
                     # 顯示結果摘要
                     print(f"  ✅ 總體得分: {result.overall_score:.3f}")
@@ -211,7 +230,7 @@ class SmartRAGTester:
                         'has_image_reference': '📷' in answer or 'http' in answer,
                         'success': True,
                         'error_message': None,
-                        'cost_info': cost_info.__dict__,
+                        'cost_info': cost_info,
                         'api_response': rag_response
                     }
                     
@@ -317,7 +336,7 @@ class SmartRAGTester:
         
         image_references = len([r for r in results if r.get('has_image_reference', False)])
         
-        total_cost = sum(r.get('cost_info', {}).get('total_cost', 0.0) for r in results)
+        total_cost = sum(getattr(r.get('cost_info'), 'total_cost', 0.0) if r.get('cost_info') else 0.0 for r in results)
         
         print(f"📊 輸入類型: {input_type.upper()}")
         print(f"📊 總體統計:")

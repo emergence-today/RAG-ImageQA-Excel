@@ -116,10 +116,11 @@ class ReportGenerator:
         for r in successful_results:
             if 'cost_info' in r and r['cost_info']:
                 cost_info = r['cost_info']
-                total_claude_question_cost += cost_info.get('claude_question_generation_cost', 0.0)
-                total_claude_evaluation_cost += cost_info.get('claude_evaluation_cost', 0.0)
-                total_openai_cost += cost_info.get('openai_rag_cost', 0.0)
-                total_cost += cost_info.get('total_cost', 0.0)
+                # CostInfo 是 dataclass，使用屬性訪問而不是 .get() 方法
+                total_claude_question_cost += getattr(cost_info, 'claude_question_generation_cost', 0.0)
+                total_claude_evaluation_cost += getattr(cost_info, 'claude_evaluation_cost', 0.0)
+                total_openai_cost += getattr(cost_info, 'openai_rag_cost', 0.0)
+                total_cost += getattr(cost_info, 'total_cost', 0.0)
         
         # 類別統計
         category_stats = defaultdict(list)
@@ -623,42 +624,50 @@ class ReportGenerator:
         for i, result in enumerate(results, 1):
             score_class = "high" if result['overall_score'] >= 0.8 else "medium" if result['overall_score'] >= 0.6 else "low"
 
-            # 生成圖片 URL（使用 main.py 的圖片服務端點）
-            image_url = ""
+            # 生成圖片顯示 HTML（使用 Base64 編碼嵌入圖片）
             image_display_html = ""
             if 'image_path' in result and result['image_path'] and os.path.exists(result['image_path']):
                 from pathlib import Path
-                from urllib.parse import quote
+                import base64
 
-                image_name = Path(result['image_path']).name
-                encoded_image_name = quote(image_name)
+                image_path = result['image_path']
+                image_name = Path(image_path).name
 
-                # 使用配置中的 API URL 構建圖片 URL
-                # 從 RAG API URL 中提取基礎 URL，移除端點路徑
-                api_base_url = self.config.RAG_API_URL
-                if '/query-with-memory' in api_base_url:
-                    api_base_url = api_base_url.replace('/query-with-memory', '')
-                elif '/chat' in api_base_url:
-                    api_base_url = api_base_url.replace('/chat', '')
+                # 將圖片轉換為 Base64 編碼並嵌入 HTML
+                try:
+                    with open(image_path, 'rb') as img_file:
+                        img_data = img_file.read()
+                        img_base64 = base64.b64encode(img_data).decode('utf-8')
 
-                image_url = f"{api_base_url}/images/{encoded_image_name}"
+                        # 根據檔案副檔名確定 MIME 類型
+                        file_ext = Path(image_path).suffix.lower()
+                        if file_ext in ['.jpg', '.jpeg']:
+                            mime_type = 'image/jpeg'
+                        elif file_ext == '.png':
+                            mime_type = 'image/png'
+                        elif file_ext == '.gif':
+                            mime_type = 'image/gif'
+                        else:
+                            mime_type = 'image/png'  # 預設為 PNG
 
-                print(f"🖼️ 生成圖片 URL: {image_url}")
+                        data_url = f"data:{mime_type};base64,{img_base64}"
 
-                # 創建圖片顯示 HTML，包含錯誤處理
-                image_display_html = f"""
-                <img class='test-image' src='{image_url}' alt='{image_name}' onclick='openModal(this)'
-                     onerror="console.error('圖片載入失敗:', this.src); this.style.display='none'; this.nextElementSibling.style.display='block';">
-                <div style="display:none; padding:20px; border:2px dashed #ccc; text-align:center; color:#666; border-radius:8px; max-width: 350px;">
-                    <div style="font-size:16px; margin-bottom:5px;">📷 圖片載入失敗</div>
-                    <small style="color:#999;">{image_name}</small><br>
-                    <small style="color:#999; word-break: break-all;">URL: {image_url}</small><br>
-                    <small style="color:#999;">請確保 main.py 服務器正在運行</small><br>
-                    <button onclick="window.open('{image_url}', '_blank')" style="margin-top:10px; padding:5px 10px; background:#007bff; color:white; border:none; border-radius:3px; cursor:pointer;">
-                        直接測試圖片URL
-                    </button>
-                </div>
-                """
+                        print(f"🖼️ 成功載入圖片: {image_name}")
+
+                        # 創建圖片顯示 HTML
+                        image_display_html = f"""
+                        <img class='test-image' src='{data_url}' alt='{image_name}' onclick='openModal(this)'>
+                        """
+
+                except Exception as e:
+                    print(f"⚠️ 無法載入圖片 {image_name}: {e}")
+                    image_display_html = f"""
+                    <div style="padding:20px; border:2px dashed #ccc; text-align:center; color:#666; border-radius:8px; max-width: 350px;">
+                        <div style="font-size:16px; margin-bottom:5px;">📷 圖片載入失敗</div>
+                        <small style="color:#999;">{image_name}</small><br>
+                        <small style="color:#999;">錯誤: {str(e)}</small>
+                    </div>
+                    """
             else:
                 # 檢查是否是 Excel 模式（category 包含 Excel_Row）
                 category = result.get('category', '')
@@ -701,7 +710,7 @@ class ReportGenerator:
                     <div><strong>清晰度:</strong> {result.get('clarity', 0.0):.3f}</div>
                     <div><strong>圖片引用:</strong> {'是' if result.get('has_image_reference', False) else '否'}</div>
                     <div><strong>響應時間:</strong> {result.get('response_time', 0.0):.2f}s</div>
-                    <div><strong>成本:</strong> ${result.get('cost_info', {}).get('total_cost', 0.0):.6f}</div>
+                    <div><strong>成本:</strong> ${getattr(result.get('cost_info'), 'total_cost', 0.0) if result.get('cost_info') else 0.0:.6f}</div>
                 </div>
             </div>
 
