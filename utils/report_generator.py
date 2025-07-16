@@ -58,7 +58,8 @@ class ReportGenerator:
     def _calculate_statistics(self, results: List[Dict]) -> Dict:
         """計算測試統計數據"""
         total_tests = len(results)
-        successful_results = [r for r in results if r.get('success', True)]
+        # 判斷成功：沒有錯誤訊息且有得分
+        successful_results = [r for r in results if not r.get('error_message') and r.get('overall_score', 0.0) > 0]
         
         if not successful_results:
             return {
@@ -103,11 +104,18 @@ class ReportGenerator:
         for r in successful_results:
             if 'cost_info' in r and r['cost_info']:
                 cost_info = r['cost_info']
-                # CostInfo 是 dataclass，使用屬性訪問而不是 .get() 方法
-                total_claude_question_cost += getattr(cost_info, 'claude_question_generation_cost', 0.0)
-                total_claude_evaluation_cost += getattr(cost_info, 'claude_evaluation_cost', 0.0)
-                total_openai_cost += getattr(cost_info, 'openai_rag_cost', 0.0)
-                total_cost += getattr(cost_info, 'total_cost', 0.0)
+                # cost_info 現在是字典格式（從 smart_tester.py 轉換而來）
+                if isinstance(cost_info, dict):
+                    total_claude_question_cost += cost_info.get('claude_question_generation_cost', 0.0)
+                    total_claude_evaluation_cost += cost_info.get('claude_evaluation_cost', 0.0)
+                    total_openai_cost += cost_info.get('openai_rag_cost', 0.0)
+                    total_cost += cost_info.get('total_cost', 0.0)
+                else:
+                    # 向後兼容：如果是物件格式
+                    total_claude_question_cost += getattr(cost_info, 'claude_question_generation_cost', 0.0)
+                    total_claude_evaluation_cost += getattr(cost_info, 'claude_evaluation_cost', 0.0)
+                    total_openai_cost += getattr(cost_info, 'openai_rag_cost', 0.0)
+                    total_cost += getattr(cost_info, 'total_cost', 0.0)
         
         # 類別統計
         category_stats = defaultdict(list)
@@ -146,6 +154,18 @@ class ReportGenerator:
         </html>
         """
     
+    def _get_cost_from_result(self, result: Dict) -> float:
+        """從結果中提取成本資訊"""
+        cost_info = result.get('cost_info')
+        if not cost_info:
+            return 0.0
+
+        if isinstance(cost_info, dict):
+            return cost_info.get('total_cost', 0.0)
+        else:
+            # 向後兼容：如果是物件格式
+            return getattr(cost_info, 'total_cost', 0.0)
+
     def _format_answer_with_images(self, answer: str) -> str:
         """將答案中的圖片URL轉換成HTML圖片標籤"""
         import re
@@ -699,7 +719,7 @@ class ReportGenerator:
                     <div><strong>清晰度:</strong> {result.get('clarity', 0.0):.3f}</div>
                     <div><strong>圖片引用:</strong> {'是' if result.get('has_image_reference', False) else '否'}</div>
                     <div><strong>響應時間:</strong> {result.get('response_time', 0.0):.2f}s</div>
-                    <div><strong>成本:</strong> ${getattr(result.get('cost_info'), 'total_cost', 0.0) if result.get('cost_info') else 0.0:.6f}</div>
+                    <div><strong>成本:</strong> ${self._get_cost_from_result(result):.6f}</div>
                 </div>
             </div>
 

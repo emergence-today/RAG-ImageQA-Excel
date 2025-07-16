@@ -56,21 +56,32 @@ class SmartRAGTester:
         
         return "unknown"
     
-    def process_folder_input(self, folder_path: str, max_images_per_category: int = 5) -> List[Dict[str, Any]]:
+    def process_folder_input(self, folder_path: str, max_images_per_category: int = 5, selected_categories: List[str] = None) -> List[Dict[str, Any]]:
         """處理資料夾輸入 - 找圖片生成問題並測試"""
         print(f"📁 處理資料夾: {folder_path}")
-        
+
         # 獲取圖片分類
-        categories = self.image_processor.get_image_categories(folder_path)
-        
-        if not categories:
+        all_categories = self.image_processor.get_image_categories(folder_path)
+
+        if not all_categories:
             print("❌ 資料夾中沒有找到圖片")
             return []
-        
-        print(f"📂 找到 {len(categories)} 個類別:")
+
+        # 根據用戶選擇篩選類別
+        if selected_categories:
+            categories = {cat: all_categories[cat] for cat in selected_categories if cat in all_categories}
+            print(f"📂 用戶選擇了 {len(categories)} 個類別:")
+        else:
+            categories = all_categories
+            print(f"📂 找到 {len(categories)} 個類別:")
+
         for category, images in categories.items():
             print(f"   - {category}: {len(images)} 張圖片")
-        
+
+        if not categories:
+            print("❌ 選擇的類別中沒有找到圖片")
+            return []
+
         # 執行測試
         results = []
         total_images = sum(min(len(images), max_images_per_category) for images in categories.values())
@@ -97,7 +108,13 @@ class SmartRAGTester:
                 try:
                     # 測試單張圖片（使用全局記憶功能，所有圖片共享同一個 session）
                     result = self.rag_tester.test_single_image(image_path, session_id=global_session_id)
-                    results.append(result.__dict__)
+
+                    # 將結果轉換為字典，確保 cost_info 也是字典格式
+                    result_dict = result.__dict__.copy()
+                    if hasattr(result.cost_info, '__dict__'):
+                        result_dict['cost_info'] = result.cost_info.__dict__
+
+                    results.append(result_dict)
                     
                     # 顯示結果摘要
                     print(f"  ✅ 總體得分: {result.overall_score:.3f}")
@@ -266,7 +283,8 @@ class SmartRAGTester:
         
         if input_type == "folder":
             max_images = kwargs.get('max_images_per_category', 5)
-            results = self.process_folder_input(input_path, max_images)
+            selected_categories = kwargs.get('selected_categories', None)
+            results = self.process_folder_input(input_path, max_images, selected_categories)
         elif input_type == "excel":
             results = self.process_excel_input(input_path)
         else:
@@ -309,9 +327,11 @@ class SmartRAGTester:
         
         # 計算統計數據
         total_tests = len(results)
-        successful_tests = len([r for r in results if r.get('success', False)])
-        
-        scores = [r.get('overall_score', 0.0) for r in results if r.get('success', False)]
+        # 判斷成功：沒有錯誤訊息且有得分
+        successful_tests = len([r for r in results if not r.get('error_message') and r.get('overall_score', 0.0) > 0])
+
+        # 只計算成功測試的平均分數
+        scores = [r.get('overall_score', 0.0) for r in results if not r.get('error_message') and r.get('overall_score', 0.0) > 0]
         avg_score = sum(scores) / len(scores) if scores else 0.0
         
         technical_scores = [r.get('evaluation_scores', {}).get('technical_accuracy', 0.0) for r in results]

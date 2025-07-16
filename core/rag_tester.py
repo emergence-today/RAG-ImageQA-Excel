@@ -68,8 +68,20 @@ class CostCalculator:
     
     @staticmethod
     def estimate_tokens(text: str) -> int:
-        """估算文本的 token 數量 (粗略估算: 1 token ≈ 4 字符)"""
-        return len(text) // 4
+        """估算文本的 token 數量 (改進的估算方法)"""
+        if not text:
+            return 0
+
+        # 對於中文文本，通常 1 個字符 ≈ 1 token
+        # 對於英文文本，通常 4 個字符 ≈ 1 token
+        # 這裡使用混合估算：中文字符按 1:1，英文按 4:1
+        chinese_chars = sum(1 for char in text if '\u4e00' <= char <= '\u9fff')
+        english_chars = len(text) - chinese_chars
+
+        estimated_tokens = chinese_chars + (english_chars // 4)
+
+        # 確保至少有一些 token（避免為 0）
+        return max(estimated_tokens, len(text) // 3)
 
     @staticmethod
     def calculate_claude_cost(input_text: str, output_text: str) -> float:
@@ -79,8 +91,12 @@ class CostCalculator:
 
         input_cost = input_tokens * RAGTestConfig.CLAUDE_INPUT_COST_PER_TOKEN
         output_cost = output_tokens * RAGTestConfig.CLAUDE_OUTPUT_COST_PER_TOKEN
+        total_cost = input_cost + output_cost
 
-        return input_cost + output_cost
+        # 調試資訊
+        logger.debug(f"💰 Claude 成本計算: 輸入 {input_tokens} tokens (${input_cost:.6f}), 輸出 {output_tokens} tokens (${output_cost:.6f}), 總計 ${total_cost:.6f}")
+
+        return total_cost
 
     @staticmethod
     def calculate_openai_cost(input_text: str, output_text: str) -> float:
@@ -90,8 +106,12 @@ class CostCalculator:
 
         input_cost = input_tokens * RAGTestConfig.OPENAI_INPUT_COST_PER_TOKEN
         output_cost = output_tokens * RAGTestConfig.OPENAI_OUTPUT_COST_PER_TOKEN
+        total_cost = input_cost + output_cost
 
-        return input_cost + output_cost
+        # 調試資訊
+        logger.debug(f"💰 OpenAI 成本計算: 輸入 {input_tokens} tokens (${input_cost:.6f}), 輸出 {output_tokens} tokens (${output_cost:.6f}), 總計 ${total_cost:.6f}")
+
+        return total_cost
 
 class ClaudeClient:
     """Claude API 客戶端 - 使用 AWS Bedrock"""

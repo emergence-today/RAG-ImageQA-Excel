@@ -47,8 +47,10 @@ class RAGTestConfig:
     # 成本計算設定
     # ===========================================
     # Claude 3.7 Sonnet 定價 (USD per token)
-    CLAUDE_INPUT_COST_PER_TOKEN = float(os.getenv('CLAUDE_INPUT_COST_PER_TOKEN', '0.000003'))
-    CLAUDE_OUTPUT_COST_PER_TOKEN = float(os.getenv('CLAUDE_OUTPUT_COST_PER_TOKEN', '0.000015'))
+    # 官方定價 $0.003 / 1000 字符 → 約 0.000012 USD / token
+    # 官方定價 $0.015 / 1000 字符 → 約 0.00006 USD / token
+    CLAUDE_INPUT_COST_PER_TOKEN = float(os.getenv('CLAUDE_3_7_SONNET_INPUT_COST_PER_TOKEN', '0.000012'))
+    CLAUDE_OUTPUT_COST_PER_TOKEN = float(os.getenv('CLAUDE_3_7_SONNET_OUTPUT_COST_PER_TOKEN', '0.00006'))
 
     # OpenAI GPT-4o 定價 (USD per token)
     OPENAI_INPUT_COST_PER_TOKEN = float(os.getenv('OPENAI_INPUT_COST_PER_TOKEN', '0.0000025'))
