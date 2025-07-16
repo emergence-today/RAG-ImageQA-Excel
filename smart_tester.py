@@ -56,76 +56,48 @@ class SmartRAGTester:
         
         return "unknown"
     
-    def process_folder_input(self, folder_path: str, max_images_per_category: int = 5, selected_categories: List[str] = None) -> List[Dict[str, Any]]:
+    def process_folder_input(self, folder_path: str, max_images_per_category: int = 5) -> List[Dict[str, Any]]:
         """處理資料夾輸入 - 找圖片生成問題並測試"""
         print(f"📁 處理資料夾: {folder_path}")
-
+        
         # 獲取圖片分類
         categories = self.image_processor.get_image_categories(folder_path)
-
+        
         if not categories:
             print("❌ 資料夾中沒有找到圖片")
             return []
-
-        # 如果有指定類別，只處理選定的類別
-        if selected_categories:
-            filtered_categories = {}
-            for category in selected_categories:
-                if category in categories:
-                    filtered_categories[category] = categories[category]
-                else:
-                    print(f"⚠️ 警告: 找不到類別 '{category}'")
-            categories = filtered_categories
-
-            if not categories:
-                print("❌ 沒有找到任何選定的類別")
-                return []
-
-        print(f"📂 將測試 {len(categories)} 個類別:")
+        
+        print(f"📂 找到 {len(categories)} 個類別:")
         for category, images in categories.items():
             print(f"   - {category}: {len(images)} 張圖片")
-
+        
         # 執行測試
         results = []
         total_images = sum(min(len(images), max_images_per_category) for images in categories.values())
         current_image = 0
 
+        # 為這次測試運行創建一個全局 session ID，所有圖片共享記憶
+        global_session_id = f"test_global_memory_{int(time.time())}"
+        print(f"\n🧠 使用全局記憶會話: {global_session_id}")
+        print(f"   📝 所有圖片測試將共享同一個對話記憶，實現累積學習")
+
         for category, images in categories.items():
             print(f"\n📁 測試類別: {category}")
             print("-" * 40)
-            
+
             # 限制每個類別的圖片數量
             test_images = images[:max_images_per_category]
-            
+
             for i, image_path in enumerate(test_images, 1):
                 current_image += 1
                 image_name = Path(image_path).name
-                
-                print(f"[{current_image}/{total_images}] 測試圖片: {image_name}")
-                
-                try:
-                    # 測試單張圖片（會自動生成問題）
-                    result = self.rag_tester.test_single_image(image_path)
 
-                    # 將 RAGTestResult 轉換為字典，但保持 cost_info 為物件
-                    result_dict = {
-                        'image_path': result.image_path,
-                        'category': result.category,
-                        'generated_question': result.generated_question,
-                        'rag_answer': result.rag_answer,
-                        'evaluation_scores': result.evaluation_scores,
-                        'overall_score': result.overall_score,
-                        'response_time': result.response_time,
-                        'has_image_reference': result.has_image_reference,
-                        'technical_accuracy': result.technical_accuracy,
-                        'completeness': result.completeness,
-                        'clarity': result.clarity,
-                        'cost_info': result.cost_info,  # 保持為 CostInfo 物件
-                        'api_response': result.api_response,
-                        'error_message': result.error_message,
-                        'success': result.error_message is None
-                    }
-                    results.append(result_dict)
+                print(f"[{current_image}/{total_images}] 測試圖片: {image_name}")
+
+                try:
+                    # 測試單張圖片（使用全局記憶功能，所有圖片共享同一個 session）
+                    result = self.rag_tester.test_single_image(image_path, session_id=global_session_id)
+                    results.append(result.__dict__)
                     
                     # 顯示結果摘要
                     print(f"  ✅ 總體得分: {result.overall_score:.3f}")
@@ -244,7 +216,7 @@ class SmartRAGTester:
                         'has_image_reference': '📷' in answer or 'http' in answer,
                         'success': True,
                         'error_message': None,
-                        'cost_info': cost_info,
+                        'cost_info': cost_info.__dict__,
                         'api_response': rag_response
                     }
                     
@@ -294,8 +266,7 @@ class SmartRAGTester:
         
         if input_type == "folder":
             max_images = kwargs.get('max_images_per_category', 5)
-            selected_categories = kwargs.get('selected_categories', None)
-            results = self.process_folder_input(input_path, max_images, selected_categories)
+            results = self.process_folder_input(input_path, max_images)
         elif input_type == "excel":
             results = self.process_excel_input(input_path)
         else:
@@ -351,7 +322,7 @@ class SmartRAGTester:
         
         image_references = len([r for r in results if r.get('has_image_reference', False)])
         
-        total_cost = sum(getattr(r.get('cost_info'), 'total_cost', 0.0) if r.get('cost_info') else 0.0 for r in results)
+        total_cost = sum(r.get('cost_info', {}).get('total_cost', 0.0) for r in results)
         
         print(f"📊 輸入類型: {input_type.upper()}")
         print(f"📊 總體統計:")

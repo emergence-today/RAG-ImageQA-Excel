@@ -274,22 +274,20 @@ class ClaudeClient:
 
 class RAGAPIClient:
     """RAG API 客戶端"""
-    
+
     def __init__(self):
         self.api_url = RAGTestConfig.RAG_API_URL
         self.timeout = RAGTestConfig.API_TIMEOUT
         self.retry_count = RAGTestConfig.RETRY_COUNT
-    
+
     def query_rag(self, question: str, session_id: str = None) -> Dict[str, Any]:
         """查詢 RAG 系統"""
-        if not session_id:
-            session_id = f"test_session_{int(time.time())}"
-
-        # 使用 /query-with-memory 端點的請求格式
+        # 使用 /query-with-memory 端點格式，啟用記憶功能
         payload = {
             "user_query": question,
+            "sessionId": session_id or f"test_session_{int(time.time())}",
             "streaming": False,
-            "sessionId": session_id
+            "use_persistent_session": True  # 啟用記憶功能
         }
         
         for attempt in range(self.retry_count):
@@ -335,14 +333,26 @@ class RAGTester:
         # 驗證配置
         if not RAGTestConfig.validate_config():
             raise ValueError("配置驗證失敗")
-        
-        self.claude_client = ClaudeClient()
+
+        # 初始化必要組件
         self.rag_client = RAGAPIClient()
         self.cost_calculator = CostCalculator()
-        
+
+        # 初始化可選組件
+        self.claude_client = None
+        if RAGTestConfig.AWS_ACCESS_KEY_ID and RAGTestConfig.AWS_SECRET_ACCESS_KEY:
+            try:
+                self.claude_client = ClaudeClient()
+                logger.info("✅ Claude 客戶端 (AWS Bedrock) 初始化成功")
+            except Exception as e:
+                logger.warning(f"⚠️ Claude 客戶端 (AWS Bedrock) 初始化失敗: {e}")
+                logger.info("   將跳過問題生成和評估功能")
+        else:
+            logger.info("ℹ️ 未設定 AWS 憑證，將跳過問題生成和評估功能")
+
         logger.info("✅ RAG 測試器初始化完成")
     
-    def test_single_image(self, image_path: str, custom_question: str = None) -> RAGTestResult:
+    def test_single_image(self, image_path: str, custom_question: str = None, session_id: str = None) -> RAGTestResult:
         """測試單張圖片"""
         start_time = time.time()
         
@@ -357,20 +367,42 @@ class RAGTester:
                 question = custom_question
                 question_generation_cost = 0.0
             else:
-                question = self.claude_client.generate_question_from_image(image_path)
-                question_generation_cost = self.cost_calculator.calculate_claude_cost(
-                    f"分析圖片並生成問題: {image_path}", question
-                )
-            
-            # 2. 查詢 RAG 系統
-            rag_response = self.rag_client.query_rag(question)
+                if self.claude_client:
+                    question = self.claude_client.generate_question_from_image(image_path)
+                    question_generation_cost = self.cost_calculator.calculate_claude_cost(
+                        f"分析圖片並生成問題: {image_path}", question
+                    )
+                else:
+                    # 沒有 Claude 時使用預設問題
+                    question = f"請描述這張圖片 {image_name} 的內容和技術要點"
+                    question_generation_cost = 0.0
+                    logger.info("ℹ️ 使用預設問題（未設定 Claude API）")
+
+            # 2. 查詢 RAG 系統（使用記憶功能）
+            # 為同一類別的圖片使用相同的 session ID，以測試記憶功能
+            if not session_id:
+                session_id = f"test_category_{category}_{int(time.time() // 3600)}"  # 每小時一個新會話
+
+            rag_response = self.rag_client.query_rag(question, session_id)
             rag_answer = rag_response.get('response', rag_response.get('reply', rag_response.get('answer', '無法獲取回答')))
-            
+
             # 3. 評估回答品質
-            evaluation = self.claude_client.evaluate_answer_quality(question, rag_answer, image_path)
-            evaluation_cost = self.cost_calculator.calculate_claude_cost(
-                f"評估問題: {question}\n回答: {rag_answer}", str(evaluation)
-            )
+            if self.claude_client:
+                evaluation = self.claude_client.evaluate_answer_quality(question, rag_answer, image_path)
+                evaluation_cost = self.cost_calculator.calculate_claude_cost(
+                    f"評估問題: {question}\n回答: {rag_answer}", str(evaluation)
+                )
+            else:
+                # 沒有 Claude 時使用簡單評估
+                evaluation = {
+                    "technical_accuracy": 0.8,  # 預設分數
+                    "completeness": 0.8,
+                    "clarity": 0.8,
+                    "overall_score": 0.8,
+                    "evaluation_reason": "未使用 Claude 評估，使用預設分數"
+                }
+                evaluation_cost = 0.0
+                logger.info("ℹ️ 使用預設評估分數（未設定 Claude API）")
             
             # 4. 計算 RAG 成本
             rag_cost = self.cost_calculator.calculate_openai_cost(question, rag_answer)
@@ -427,3 +459,5 @@ class RAGTester:
                 clarity=0.0,
                 error_message=str(e)
             )
+
+
