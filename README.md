@@ -23,7 +23,7 @@ pip install requests pillow python-dotenv
 
 ```env
 # RAG 測試模組設定
-RAG_TEST_API_URL=http://localhost:8006/api/v1/query
+RAG_TEST_API_URL=http://localhost:8006/api/v1/query-with-memory
 CLAUDE_API_KEY=your_claude_api_key_here
 CLAUDE_MODEL=us.anthropic.claude-3-7-sonnet-20250219-v1:0
 RAG_TEST_IMAGE_DIR=/path/to/your/images

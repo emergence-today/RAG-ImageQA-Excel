@@ -104,7 +104,11 @@ class ImageProcessor:
             if root == image_dir:
                 continue
 
+            # 排除 test_RAG 資料夾
             category = os.path.basename(root)
+            if category == "test_RAG":
+                continue
+
             image_files = []
 
             for file in files:

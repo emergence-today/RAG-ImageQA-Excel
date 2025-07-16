@@ -175,26 +175,80 @@ class ClaudeClient:
         try:
             image_name = Path(image_path).name
 
-            # 根據圖片類型生成更具體的問題
+            # 根據圖片類型生成更具體的問題，避免直接提到圖片
             if "LVDS" in image_name:
-                question = "請說明這張 LVDS 線束加工圖片中的製程步驟、技術要求和品質控制要點。"
+                question = "LVDS 線束加工的製程步驟、技術要求和品質控制要點是什麼？"
             elif "Cable" in image_name:
-                question = "請詳細說明這張 Cable 設計圖片中的規格參數、設計要求和應用場景。"
+                question = "Cable 設計的規格參數、設計要求和應用場景有哪些？"
             elif "Wire" in image_name:
-                question = "請解釋這張 Wire Harness 圖片中的製程介紹、加工方法和技術標準。"
+                question = "Wire Harness 的製程介紹、加工方法和技術標準是什麼？"
             elif "FFC" in image_name:
-                question = "請說明這張 FFC 設計圖片中的規範要求、設計原則和應用注意事項。"
+                question = "FFC 設計中的預載要求、設計原則和應用注意事項是什麼？"
             elif "材料" in image_name:
-                question = "請介紹這張材料圖片中的材料特性、規格參數和應用範圍。"
+                question = "這種材料的特性、規格參數和應用範圍是什麼？"
             else:
-                question = f"請詳細說明圖片 {image_name} 中顯示的技術內容和重要資訊。"
+                # 從檔名中提取技術類別，生成更自然的問題
+                category = self._extract_category_from_filename(image_name)
+                question = f"{category}的技術要點和重要規範是什麼？"
 
             logger.info(f"✅ 為圖片 {image_name} 生成問題: {question[:50]}...")
             return question
 
         except Exception as e:
             logger.error(f"❌ 生成問題失敗: {e}")
-            return "請說明這張圖片的內容。"
+            return "相關技術內容和規範要求是什麼？"
+
+    def _extract_category_from_filename(self, filename: str) -> str:
+        """從檔名中提取技術類別"""
+        try:
+            # 移除副檔名
+            name_without_ext = Path(filename).stem
+
+            # 根據檔名模式判斷類別
+            if "1.0" in name_without_ext or "LVDS" in name_without_ext:
+                return "LVDS線束加工"
+            elif "1.1" in name_without_ext or "Cable" in name_without_ext:
+                return "Cable設計規範"
+            elif "1.2" in name_without_ext or "Wire" in name_without_ext:
+                return "Wire Harness製程"
+            elif "1.3" in name_without_ext or "WH" in name_without_ext:
+                return "WH線束加工"
+            elif "1.4" in name_without_ext or "FFC" in name_without_ext:
+                return "FFC設計規範"
+            elif "2.0" in name_without_ext:
+                return "外部線設計"
+            elif "2.1" in name_without_ext or "EC" in name_without_ext:
+                return "EC產品工藝"
+            elif "2.2" in name_without_ext:
+                return "外部線應用"
+            elif "3.0" in name_without_ext:
+                return "汽車電線技術"
+            elif "3.1" in name_without_ext or "AT-Cable" in name_without_ext:
+                return "AT-Cable設計"
+            elif "材料" in name_without_ext:
+                return "材料特性"
+            elif "連接器" in name_without_ext:
+                return "連接器技術"
+            elif "測試" in name_without_ext:
+                return "測試程序"
+            elif "合同" in name_without_ext:
+                return "合同評審"
+            elif "客戶" in name_without_ext:
+                return "客戶管理"
+            elif "產品" in name_without_ext:
+                return "產品設計"
+            elif "識圖" in name_without_ext:
+                return "識圖指南"
+            elif "清單" in name_without_ext:
+                return "清單文件"
+            elif "QSA" in name_without_ext:
+                return "QSA稽核"
+            elif "生產線" in name_without_ext:
+                return "生產線學習"
+            else:
+                return "技術規範"
+        except Exception:
+            return "技術內容"
 
     def evaluate_answer_quality(self, question: str, answer: str, image_path: str = None) -> Dict[str, float]:
         """評估回答品質"""
